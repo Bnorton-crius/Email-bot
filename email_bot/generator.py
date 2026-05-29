@@ -1,4 +1,6 @@
+import base64
 import json
+import os
 from dataclasses import dataclass, field
 
 import anthropic
@@ -19,6 +21,9 @@ Email rules:
 - Address the company by name
 - Under 200 words total
 - Mention 2–3 specific issues you spotted on their site (be specific, not generic)
+- If a screenshot is provided, reference one visual detail you actually observe
+- If their site runs on a page builder (Wix, Squarespace, GoDaddy, etc.), mention that it limits \
+performance, customisation, and SEO ceiling — and that we can migrate them to a custom solution
 - Professional but conversational — not salesy or pushy
 - End with a single, low-pressure CTA (e.g. "happy to chat for 15 minutes")
 - No "I hope this email finds you well" or similar filler
@@ -41,23 +46,53 @@ def generate_email(
     company: dict,
     score_result: ScoreResult,
     client: anthropic.Anthropic | None = None,
+    screenshot_path: str | None = None,
 ) -> EmailDraft:
     if client is None:
-        import os
         client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
 
     issues = score_result.notes[:3] if score_result.notes else ["outdated overall design"]
     issues_text = "\n".join(f"- {issue}" for issue in issues)
 
-    user_content = (
+    platform = company.get("platform") or getattr(score_result, "platform", "Unknown")
+    platform_line = (
+        f"Detected platform: {platform} (mention this in the email)\n"
+        if platform and platform != "Unknown"
+        else ""
+    )
+
+    user_text = (
         f"Write a cold outreach email for this company:\n\n"
         f"Company name: {company.get('name', 'the company')}\n"
         f"Website: {company.get('domain', '')}\n"
         f"Industry: {company.get('industry', 'business')}\n"
-        f"Website quality score: {score_result.total}/100\n\n"
-        f"Specific issues found on their current website:\n{issues_text}\n\n"
+        f"Website quality score: {score_result.total}/100\n"
+        f"{platform_line}"
+        f"\nSpecific issues found on their current website:\n{issues_text}\n\n"
         f"Return JSON only."
     )
+
+    # Build user message — include screenshot image block if available
+    user_content: list[dict] | str
+    if screenshot_path and os.path.isfile(screenshot_path):
+        try:
+            with open(screenshot_path, "rb") as f:
+                img_b64 = base64.standard_b64encode(f.read()).decode("utf-8")
+            user_content = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": img_b64,
+                    },
+                },
+                {"type": "text", "text": user_text},
+            ]
+        except Exception:
+            user_content = user_text
+    else:
+        user_content = user_text
 
     response = client.messages.create(
         model="claude-sonnet-4-6",
@@ -74,7 +109,7 @@ def generate_email(
 
     raw = response.content[0].text.strip()
 
-    # Strip accidental markdown fences: ```json ... ``` or ``` ... ```
+    # Strip accidental markdown fences
     if raw.startswith("```"):
         raw = raw.lstrip("`")
         if raw.startswith("json"):

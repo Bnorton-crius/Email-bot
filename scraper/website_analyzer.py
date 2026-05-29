@@ -1,6 +1,5 @@
 import re
 import time
-import warnings
 from dataclasses import dataclass, field
 from urllib.parse import urljoin
 
@@ -27,6 +26,16 @@ _WEIGHTS = {
     "modern_signals": 10,
 }
 
+# Platform fingerprints: (platform_name, [html_signals], [header_prefixes])
+_PLATFORMS = [
+    ("Wix",         ["static.wixstatic.com", "_wixCIDX", "wix.com/lpviral"],    ["x-wix-"]),
+    ("Squarespace", ["static1.squarespace.com", "squarespace.com/static"],       []),
+    ("Webflow",     ["webflow.io", ".webflow.com", "webflow.js"],                []),
+    ("Shopify",     ["cdn.shopify.com", "myshopify.com"],                        []),
+    ("GoDaddy",     ["secureserver.net", "godaddysites.com"],                    []),
+    ("WordPress",   ["wp-content/", "wp-includes/"],                             []),
+]
+
 
 @dataclass
 class ScoreResult:
@@ -36,6 +45,17 @@ class ScoreResult:
     status: str  # "ok" | "unreachable" | "error"
     response_time_ms: int
     notes: list = field(default_factory=list)
+    platform: str = "Unknown"
+
+
+def detect_platform(resp: requests.Response, html: str) -> str:
+    headers_lower = {k.lower(): v for k, v in resp.headers.items()}
+    for name, html_signals, header_prefixes in _PLATFORMS:
+        if any(h.startswith(prefix) for prefix in header_prefixes for h in headers_lower):
+            return name
+        if any(sig in html for sig in html_signals):
+            return name
+    return "Unknown"
 
 
 def analyze_website(domain: str, session: requests.Session | None = None) -> ScoreResult:
@@ -79,6 +99,7 @@ def analyze_website(domain: str, session: requests.Session | None = None) -> Sco
             status="unreachable",
             response_time_ms=0,
             notes=["Site is unreachable or timed out"],
+            platform="Unknown",
         )
 
     return _score_response(domain, resp, ssl_valid, response_time_ms, session)
@@ -100,6 +121,7 @@ def _score_response(
         soup = BeautifulSoup(resp.text, "html.parser")
 
     final_url = resp.url
+    platform = detect_platform(resp, resp.text)
 
     # 1. HTTPS / SSL (10 pts)
     if ssl_valid and final_url.startswith("https://"):
@@ -172,7 +194,8 @@ def _score_response(
             notes.append("Most images missing alt text — accessibility and SEO problem")
 
     # 8. Favicon (5 pts)
-    favicon_link = soup.find("link", rel=lambda r: r and any("icon" in v.lower() for v in r))
+    # BS4 passes the joined rel string to the lambda, not a list — use CSS selector instead
+    favicon_link = soup.select_one('link[rel*="icon"]')
     if favicon_link:
         breakdown["favicon"] = 5
     else:
@@ -211,9 +234,7 @@ def _score_response(
 
     # 10. Contact info (13 pts)
     page_text = soup.get_text(" ", strip=True)
-    has_phone = bool(
-        re.search(r"\(?\d{3}\)?[\s.\-]\d{3}[\s.\-]\d{4}", page_text)
-    )
+    has_phone = bool(re.search(r"\(?\d{3}\)?[\s.\-]\d{3}[\s.\-]\d{4}", page_text))
     has_email_addr = bool(
         re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", page_text)
     )
@@ -222,7 +243,11 @@ def _score_response(
         or soup.find("a", href=re.compile(r"/contact|/reach|/about", re.I))
     )
     has_address = bool(
-        re.search(r"\b\d{1,5}\s+\w+\s+(st|street|ave|avenue|blvd|rd|road|dr|drive|ln|lane)\b", page_text, re.I)
+        re.search(
+            r"\b\d{1,5}\s+\w+\s+(st|street|ave|avenue|blvd|rd|road|dr|drive|ln|lane)\b",
+            page_text,
+            re.I,
+        )
     )
 
     contact_score = 0
@@ -238,11 +263,10 @@ def _score_response(
     if breakdown["contact_info"] < 6:
         notes.append("Hard to find contact information on the homepage")
 
-    # 11. Modern signals: social links, schema.org (10 pts)
+    # 11. Modern signals: social links, schema.org, OG tags (10 pts)
     social_domains = ["facebook.com", "twitter.com", "x.com", "instagram.com", "linkedin.com", "youtube.com"]
     all_hrefs = [a.get("href", "") for a in soup.find_all("a", href=True)]
     has_social = any(any(sd in href for sd in social_domains) for href in all_hrefs)
-
     has_schema = (
         bool(soup.find(attrs={"itemscope": True}))
         or '"@context"' in resp.text
@@ -263,6 +287,10 @@ def _score_response(
         notes.append("No Open Graph tags — poor social media sharing appearance")
     breakdown["modern_signals"] = modern_score
 
+    # Platform note
+    if platform not in ("Unknown",):
+        notes.append(f"Site built on {platform} — limited customisation and performance ceiling")
+
     total = sum(breakdown.values())
     return ScoreResult(
         domain=domain,
@@ -271,6 +299,7 @@ def _score_response(
         status="ok",
         response_time_ms=response_time_ms,
         notes=notes,
+        platform=platform,
     )
 
 

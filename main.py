@@ -25,18 +25,20 @@ from database.tracker import (
     mark_sent,
     save_email_draft,
     update_score,
+    update_screenshot,
     upsert_company,
 )
 from email_bot.generator import generate_email
 from email_bot.sender import SmtpConfig, send_email
 from scraper.company_finder import find_companies
 from scraper.http import make_session
+from scraper.screenshot import take_screenshot
 from scraper.website_analyzer import ScoreResult, analyze_website, extract_email_from_site
 
 console = Console()
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# ── helpers ───────────────────────────────────────────────────────────────────
 
 def _smtp_cfg_from(cfg) -> SmtpConfig:
     return SmtpConfig(
@@ -75,7 +77,7 @@ def cmd_find(args) -> None:
     )
 
     with Progress(SpinnerColumn(), TextColumn("{task.description}"), console=console) as p:
-        task = p.add_task("Searching DuckDuckGo...", total=None)
+        task = p.add_task("Searching...", total=None)
         companies = find_companies(args.industry, args.location, args.limit)
         p.update(task, description=f"Found [bold]{len(companies)}[/bold] results")
 
@@ -124,6 +126,11 @@ def cmd_analyze(args) -> None:
             if not email_addr and result.status != "unreachable":
                 email_addr = extract_email_from_site(domain, session)
 
+            # Attempt screenshot (silently skips if playwright not installed)
+            screenshot_path = None
+            if result.status != "unreachable":
+                screenshot_path = take_screenshot(domain)
+
             with db_conn(cfg.db_path) as conn:
                 update_score(conn, company["id"], result)
                 if email_addr and not company.get("email"):
@@ -131,10 +138,13 @@ def cmd_analyze(args) -> None:
                         "UPDATE companies SET email = ? WHERE id = ?",
                         (email_addr, company["id"]),
                     )
+                if screenshot_path:
+                    update_screenshot(conn, company["id"], screenshot_path)
 
-            score_str = f"[{_score_color(result.total)}]{result.total}/100[/{_score_color(result.total)}]"
+            platform_badge = f" [{result.platform}]" if result.platform != "Unknown" else ""
+            sc = _score_color(result.total)
             progress.console.print(
-                f"  {domain}: {score_str} [{result.status}]"
+                f"  {domain}: [{sc}]{result.total}/100[/{sc}] [{result.status}]{platform_badge}"
             )
             progress.advance(task)
 
@@ -184,10 +194,16 @@ def cmd_generate(args) -> None:
                 status=company.get("status", "ok"),
                 response_time_ms=bd_data.get("response_time_ms", 0),
                 notes=bd_data.get("notes", []),
+                platform=company.get("platform") or "Unknown",
             )
 
             try:
-                draft = generate_email(company, score_result, client)
+                draft = generate_email(
+                    company,
+                    score_result,
+                    client,
+                    screenshot_path=company.get("screenshot_path"),
+                )
                 cached_total += draft.cached_tokens
                 with db_conn(cfg.db_path) as conn:
                     save_email_draft(conn, company["id"], draft.subject, draft.body)
@@ -205,9 +221,10 @@ def cmd_generate(args) -> None:
 def cmd_send(args) -> None:
     cfg = load_config()
     smtp_cfg = _smtp_cfg_from(cfg)
+    approved_only = getattr(args, "approved_only", False)
 
     with db_conn(cfg.db_path) as conn:
-        drafts = get_unsent_drafts(conn)
+        drafts = get_unsent_drafts(conn, approved_only=approved_only)
 
     if not drafts:
         console.print("[yellow]No pending email drafts to send — run 'generate' first.[/yellow]")
@@ -237,6 +254,8 @@ def cmd_send(args) -> None:
             smtp_cfg=smtp_cfg,
             dry_run=args.dry_run,
             delay_seconds=smtp_cfg.send_delay_seconds if not args.dry_run else 0,
+            tracking_token=row.get("tracking_token"),
+            tracking_url=cfg.tracking_url,
         )
         if success:
             if not args.dry_run:
@@ -259,21 +278,18 @@ def cmd_report(args) -> None:
         return
 
     table = Table(title="Company Report", box=box.ROUNDED, show_lines=False)
-    table.add_column("ID",       style="dim",    width=4,  justify="right")
-    table.add_column("Company",  style="cyan",   max_width=28)
-    table.add_column("Domain",   style="blue",   max_width=26)
-    table.add_column("Score",    justify="center", width=8)
+    table.add_column("ID",       style="dim",  width=4,  justify="right")
+    table.add_column("Company",  style="cyan", max_width=26)
+    table.add_column("Domain",   style="blue", max_width=24)
+    table.add_column("Score",    justify="center", width=7)
+    table.add_column("Platform", max_width=13)
     table.add_column("Status",   width=12)
     table.add_column("Email",    width=6, justify="center")
-    table.add_column("Industry", max_width=14)
+    table.add_column("Shot",     width=4, justify="center")
 
     status_colors = {
-        "emailed":     "green",
-        "analyzed":    "blue",
-        "found":       "dim",
-        "unreachable": "red",
-        "ok":          "blue",
-        "error":       "red",
+        "emailed": "green", "analyzed": "blue", "found": "dim",
+        "unreachable": "red", "ok": "blue", "error": "red",
     }
 
     for c in companies:
@@ -285,23 +301,28 @@ def cmd_report(args) -> None:
         sc2 = status_colors.get(status, "white")
         status_str = f"[{sc2}]{status}[/{sc2}]"
 
+        platform = c.get("platform") or "—"
         has_email = "[green]✓[/green]" if c.get("email") else "[red]✗[/red]"
+        has_shot = "[green]✓[/green]" if c.get("screenshot_path") else "[dim]—[/dim]"
 
         table.add_row(
             str(c["id"]),
-            (c.get("name") or "")[:28],
-            (c.get("domain") or "")[:26],
+            (c.get("name") or "")[:26],
+            (c.get("domain") or "")[:24],
             score_str,
+            platform[:13],
             status_str,
             has_email,
-            (c.get("industry") or "")[:14],
+            has_shot,
         )
 
     console.print(table)
     scored = sum(1 for c in companies if c.get("website_score") is not None)
     emailed = sum(1 for c in companies if c.get("status") == "emailed")
+    shots = sum(1 for c in companies if c.get("screenshot_path"))
     console.print(
-        f"\n[dim]Total: {len(companies)}  |  Scored: {scored}  |  Emailed: {emailed}[/dim]"
+        f"\n[dim]Total: {len(companies)}  |  Scored: {scored}  |  "
+        f"Emailed: {emailed}  |  Screenshots: {shots}[/dim]"
     )
 
 
@@ -327,6 +348,35 @@ def cmd_run(args) -> None:
     console.print(Panel("[bold green]Pipeline complete![/bold green]", border_style="green"))
 
 
+def cmd_dashboard(args) -> None:
+    try:
+        import uvicorn
+    except ImportError:
+        console.print(
+            "[red]Error: uvicorn not installed.[/red]\n"
+            "Run: [bold]pip install fastapi uvicorn[standard] jinja2[/bold]"
+        )
+        sys.exit(1)
+
+    cfg = load_config()
+    console.print(
+        Panel(
+            f"Dashboard: [bold cyan]http://localhost:{args.port}[/bold cyan]\n"
+            f"Tracking:  [bold cyan]{cfg.tracking_url}[/bold cyan]\n"
+            f"Press Ctrl+C to stop.",
+            title="[bold green]Starting Dashboard[/bold green]",
+            border_style="green",
+        )
+    )
+    uvicorn.run(
+        "dashboard.app:app",
+        host="0.0.0.0",
+        port=args.port,
+        reload=False,
+        log_level="warning",
+    )
+
+
 # ── CLI definition ────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -341,42 +391,40 @@ def main() -> None:
             "  python main.py generate --max-score 60\n"
             "  python main.py send --dry-run\n"
             "  python main.py report\n"
+            "  python main.py dashboard --port 8000\n"
             "  python main.py run --industry restaurants --location 'Austin TX' --dry-run\n"
         ),
     )
     sub = parser.add_subparsers(dest="command", metavar="COMMAND")
     sub.required = True
 
-    # find
     p = sub.add_parser("find", help="Discover companies via web search")
-    p.add_argument("--industry", required=True, help='e.g. "restaurants"')
-    p.add_argument("--location", required=True, help='e.g. "Austin TX"')
-    p.add_argument("--limit", type=int, default=20, help="Max companies to find")
+    p.add_argument("--industry", required=True)
+    p.add_argument("--location", required=True)
+    p.add_argument("--limit", type=int, default=20)
     p.set_defaults(func=cmd_find)
 
-    # analyze
     p = sub.add_parser("analyze", help="Score websites for all unscored companies")
     p.set_defaults(func=cmd_analyze)
 
-    # generate
     p = sub.add_parser("generate", help="Generate personalized email drafts via Claude")
-    p.add_argument("--min-score", type=int, default=0, dest="min_score",
-                   help="Minimum website score (default: 0)")
-    p.add_argument("--max-score", type=int, default=70, dest="max_score",
-                   help="Maximum website score — target companies below this (default: 70)")
+    p.add_argument("--min-score", type=int, default=0, dest="min_score")
+    p.add_argument("--max-score", type=int, default=70, dest="max_score")
     p.set_defaults(func=cmd_generate)
 
-    # send
     p = sub.add_parser("send", help="Send (or preview) pending email drafts")
-    p.add_argument("--dry-run", action="store_true",
-                   help="Print emails to console instead of sending")
+    p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--approved-only", action="store_true", dest="approved_only",
+                   help="Only send drafts approved in the dashboard")
     p.set_defaults(func=cmd_send)
 
-    # report
     p = sub.add_parser("report", help="Print a summary table of all tracked companies")
     p.set_defaults(func=cmd_report)
 
-    # run  (full pipeline)
+    p = sub.add_parser("dashboard", help="Launch the web dashboard")
+    p.add_argument("--port", type=int, default=8000)
+    p.set_defaults(func=cmd_dashboard)
+
     p = sub.add_parser("run", help="Full pipeline: find → analyze → generate → send")
     p.add_argument("--industry", required=True)
     p.add_argument("--location", required=True)

@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Companies{% endblock %}
+{% block nav_companies %}active{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold text-white">Companies
+    <span class="ml-2 text-base font-normal text-gray-400">({{ total }} total)</span>
+  </h1>
+</div>
+
+<div class="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="text-gray-400 text-xs uppercase bg-gray-750 border-b border-gray-700">
+      <tr>
+        <th class="text-left px-4 py-3">Company</th>
+        <th class="text-left px-4 py-3">Domain</th>
+        <th class="text-center px-4 py-3">Score</th>
+        <th class="text-left px-4 py-3">Platform</th>
+        <th class="text-left px-4 py-3">Status</th>
+        <th class="text-center px-4 py-3">Email</th>
+        <th class="text-center px-4 py-3">Screenshot</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-700">
+      {% for c in companies %}
+      <tr class="hover:bg-gray-700 transition-colors">
+        <td class="px-4 py-3 text-white font-medium max-w-[160px] truncate">{{ c.name[:32] }}</td>
+        <td class="px-4 py-3">
+          <a href="https://{{ c.domain }}" target="_blank"
+             class="text-indigo-400 hover:underline">{{ c.domain[:26] }}</a>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <span class="badge badge-{{ score_color(c.website_score) }}">
+            {{ score_label(c.website_score) }}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-gray-300 text-xs">
+          {% if c.platform and c.platform != 'Unknown' %}
+          <span class="bg-gray-700 rounded px-2 py-0.5">{{ c.platform }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3 text-gray-300 text-xs">{{ c.status }}</td>
+        <td class="px-4 py-3 text-center">
+          {% if c.email %}
+          <span title="{{ c.email }}" class="text-green-400">✓</span>
+          {% else %}
+          <span class="text-red-500">✗</span>
+          {% endif %}
+        </td>
+        <td class="px-4 py-3 text-center">
+          {% if c.screenshot_path %}
+          {% set fname = c.screenshot_path.replace('\\', '/').split('/')[-1] %}
+          <a href="/screenshots/{{ fname }}" target="_blank">
+            <img src="/screenshots/{{ fname }}"
+                 class="w-16 h-10 object-cover rounded border border-gray-600 inline-block"
+                 alt="screenshot" />
+          </a>
+          {% else %}
+          <span class="text-gray-600 text-xs">none</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" class="px-5 py-8 text-center text-gray-500">
+          No companies yet — run <code class="bg-gray-700 px-1 rounded">python main.py find ...</code>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<div class="flex justify-center gap-2 mt-6">
+  {% if page > 1 %}
+  <a href="/companies?page={{ page - 1 }}"
+     class="px-3 py-1.5 bg-gray-700 rounded hover:bg-gray-600 text-sm">← Prev</a>
+  {% endif %}
+  <span class="px-3 py-1.5 text-gray-400 text-sm">{{ page }} / {{ total_pages }}</span>
+  {% if page < total_pages %}
+  <a href="/companies?page={{ page + 1 }}"
+     class="px-3 py-1.5 bg-gray-700 rounded hover:bg-gray-600 text-sm">Next →</a>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}

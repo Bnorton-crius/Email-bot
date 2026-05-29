@@ -22,6 +22,8 @@ class Config:
     anthropic_api_key: str
     smtp: SmtpConfig
     db_path: str = "data/companies.db"
+    google_places_api_key: str = ""
+    tracking_url: str = "http://localhost:8000"
 
 
 def load_config() -> Config:
@@ -38,4 +40,6 @@ def load_config() -> Config:
         anthropic_api_key=os.environ.get("ANTHROPIC_API_KEY", ""),
         smtp=smtp,
         db_path=os.environ.get("DB_PATH", "data/companies.db"),
+        google_places_api_key=os.environ.get("GOOGLE_PLACES_API_KEY", ""),
+        tracking_url=os.environ.get("TRACKING_URL", "http://localhost:8000"),
     )

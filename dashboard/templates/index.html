@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Overview{% endblock %}
+{% block nav_overview %}active{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold text-white mb-6">Overview</h1>
+
+<!-- Stats grid -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+  {% set cards = [
+    ("Total Companies", stats.total, "🏢", "indigo"),
+    ("Scored", stats.scored, "📊", "blue"),
+    ("Emailed", stats.emailed, "✉️", "green"),
+    ("Pending Drafts", stats.pending_drafts, "📝", "yellow"),
+  ] %}
+  {% for label, val, icon, color in cards %}
+  <div class="bg-gray-800 rounded-xl border border-gray-700 p-5">
+    <div class="text-2xl mb-1">{{ icon }}</div>
+    <div class="text-3xl font-bold text-{{ color }}-400">{{ val }}</div>
+    <div class="text-sm text-gray-400 mt-1">{{ label }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Secondary stats -->
+<div class="grid grid-cols-3 gap-4 mb-8">
+  <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 text-center">
+    <div class="text-2xl font-bold text-white">{{ stats.avg_score }}</div>
+    <div class="text-sm text-gray-400 mt-1">Avg Website Score</div>
+  </div>
+  <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 text-center">
+    <div class="text-2xl font-bold text-white">{{ stats.opens }}</div>
+    <div class="text-sm text-gray-400 mt-1">Email Opens Tracked</div>
+  </div>
+  <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 text-center">
+    <div class="text-2xl font-bold text-white">{{ stats.clicks }}</div>
+    <div class="text-sm text-gray-400 mt-1">Link Clicks Tracked</div>
+  </div>
+</div>
+
+<!-- Recent companies -->
+<div class="bg-gray-800 rounded-xl border border-gray-700">
+  <div class="px-5 py-4 border-b border-gray-700">
+    <h2 class="font-semibold text-white">Recently Added</h2>
+  </div>
+  <table class="w-full text-sm">
+    <thead class="text-gray-400 text-xs uppercase">
+      <tr>
+        <th class="text-left px-5 py-3">Company</th>
+        <th class="text-left px-5 py-3">Domain</th>
+        <th class="text-center px-5 py-3">Score</th>
+        <th class="text-left px-5 py-3">Platform</th>
+        <th class="text-left px-5 py-3">Status</th>
+      </tr>
+    </thead>
+    <tbody class="divide-y divide-gray-700">
+      {% for c in recent %}
+      <tr class="hover:bg-gray-750">
+        <td class="px-5 py-3 text-white">{{ c.name[:30] }}</td>
+        <td class="px-5 py-3 text-indigo-400">
+          <a href="https://{{ c.domain }}" target="_blank" class="hover:underline">{{ c.domain[:28] }}</a>
+        </td>
+        <td class="px-5 py-3 text-center">
+          <span class="badge badge-{{ score_color(c.website_score) }}">
+            {{ score_label(c.website_score) }}
+          </span>
+        </td>
+        <td class="px-5 py-3 text-gray-300">{{ c.platform or '—' }}</td>
+        <td class="px-5 py-3 text-gray-300">{{ c.status }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="px-5 py-6 text-center text-gray-500">No companies yet — run <code>python main.py find ...</code></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

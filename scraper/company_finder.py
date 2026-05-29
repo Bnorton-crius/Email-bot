@@ -22,7 +22,7 @@ def normalize_domain(raw: str) -> str:
     parsed = urlparse(raw)
     domain = parsed.netloc or parsed.path
     domain = re.sub(r"^www\.", "", domain)
-    domain = domain.split("/")[0]  # strip any path
+    domain = domain.split("/")[0]
     domain = domain.rstrip(".")
     return domain
 
@@ -32,9 +32,26 @@ def _is_skip_domain(domain: str) -> bool:
 
 
 def find_companies(industry: str, location: str, limit: int) -> list[dict]:
-    """Search DuckDuckGo for companies in a given industry and location."""
+    """Find companies via Google Places (if configured) then DuckDuckGo."""
     results: list[dict] = []
     seen_domains: set[str] = set()
+
+    # Try Google Places first — higher quality, structured data
+    try:
+        from scraper.places_finder import find_via_places
+        places_results = find_via_places(industry, location, limit)
+        for r in places_results:
+            d = r["domain"]
+            if d and not _is_skip_domain(d) and d not in seen_domains:
+                seen_domains.add(d)
+                results.append(r)
+    except Exception:
+        pass
+
+    # Fill remaining slots with DuckDuckGo
+    remaining = limit - len(results)
+    if remaining <= 0:
+        return results[:limit]
 
     queries = [
         f"{industry} {location} official website",
@@ -62,7 +79,6 @@ def find_companies(industry: str, location: str, limit: int) -> list[dict]:
                         continue
 
                     seen_domains.add(domain)
-                    # Clean up the title – strip " - Company | Page" suffixes
                     name = re.split(r"\s[-|–]\s", title)[0].strip()[:100]
                     results.append(
                         {

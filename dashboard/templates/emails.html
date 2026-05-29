@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Emails{% endblock %}
+{% block nav_emails %}active{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-bold text-white">Email Drafts
+    <span class="ml-2 text-base font-normal text-gray-400">({{ drafts|length }} total)</span>
+  </h1>
+  <div class="text-sm text-gray-400">
+    Approve drafts here, then run <code class="bg-gray-700 px-1 rounded">python main.py send</code>
+  </div>
+</div>
+
+<div class="space-y-4">
+  {% for d in drafts %}
+  <div id="email-{{ d.id }}"
+       class="email-card rounded-lg bg-gray-800 border {% if d.sent_at %}border-gray-600{% elif d.approved %}border-green-700{% else %}border-gray-700{% endif %} p-5">
+    <div class="flex items-start justify-between gap-4">
+      <!-- Left: meta -->
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-3 mb-1">
+          <span class="font-semibold text-white">{{ d.name[:40] }}</span>
+          <a href="https://{{ d.domain }}" target="_blank"
+             class="text-indigo-400 text-sm hover:underline">{{ d.domain }}</a>
+          <span class="badge badge-{{ score_color(d.website_score) }} text-xs">
+            {{ score_label(d.website_score) }}/100
+          </span>
+          {% if d.platform and d.platform != 'Unknown' %}
+          <span class="bg-gray-700 text-gray-300 rounded px-2 py-0.5 text-xs">{{ d.platform }}</span>
+          {% endif %}
+        </div>
+        <div class="text-sm font-medium text-gray-200 mb-2">📌 {{ d.subject }}</div>
+        <div class="text-sm text-gray-400 leading-relaxed whitespace-pre-line line-clamp-4">{{ d.body[:400] }}{% if d.body|length > 400 %}…{% endif %}</div>
+
+        <!-- Tracking stats if sent -->
+        {% if d.sent_at %}
+        <div class="mt-3 flex gap-4 text-xs text-gray-500">
+          <span>Sent: {{ d.sent_at[:16] }}</span>
+          {% if d.opened_at %}<span class="text-green-500">👁 Opened {{ d.opened_at[:16] }}</span>{% endif %}
+          {% if d.click_count %}<span class="text-blue-400">🔗 {{ d.click_count }} click(s)</span>{% endif %}
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Right: actions -->
+      <div class="flex flex-col gap-2 shrink-0">
+        {% if d.sent_at %}
+        <span class="text-green-500 text-sm font-medium">✓ Sent</span>
+        {% elif d.approved %}
+        <span class="text-green-400 text-sm">✓ Approved</span>
+        <button
+          hx-post="/emails/{{ d.id }}/reject"
+          hx-target="#email-{{ d.id }}"
+          hx-swap="outerHTML"
+          hx-confirm="Delete this draft?"
+          class="btn-sm btn-red">Delete</button>
+        {% else %}
+        <button
+          hx-post="/emails/{{ d.id }}/approve"
+          hx-target="#email-{{ d.id }}"
+          hx-swap="outerHTML"
+          class="btn-sm btn-green">Approve ✓</button>
+        <button
+          hx-post="/emails/{{ d.id }}/reject"
+          hx-target="#email-{{ d.id }}"
+          hx-swap="outerHTML"
+          hx-confirm="Delete this draft? This cannot be undone."
+          class="btn-sm btn-red">Reject ✗</button>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="text-center text-gray-500 py-16">
+    No email drafts yet.<br>
+    Run <code class="bg-gray-800 px-2 py-1 rounded">python main.py generate</code> to create them.
+  </div>
+  {% endfor %}
+</div>
+
+<style>
+  .btn-sm {
+    padding: 0.35rem 0.75rem;
+    border-radius: 0.375rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s;
+  }
+  .btn-green { background: #166534; color: #86efac; }
+  .btn-green:hover { background: #15803d; }
+  .btn-red   { background: #7f1d1d; color: #fca5a5; }
+  .btn-red:hover { background: #991b1b; }
+  .line-clamp-4 {
+    display: -webkit-box; -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical; overflow: hidden;
+  }
+</style>
+{% endblock %}
