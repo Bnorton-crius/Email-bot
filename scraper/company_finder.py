@@ -11,7 +11,47 @@ _SKIP_DOMAINS = {
     "angieslist.com", "thumbtack.com", "houzz.com", "nextdoor.com",
     "angi.com", "homeadvisor.com", "citysearch.com", "mapquest.com",
     "apple.com", "amazon.com", "bing.com", "yahoo.com",
+    # Irish political / news / government directories — we want personal sites, not listings
+    "oireachtas.ie", "gov.ie", "rte.ie", "irishtimes.com", "independent.ie",
+    "thejournal.ie", "breakingnews.ie", "irishexaminer.com", "politico.eu",
+    "politics.ie", "electionsireland.org", "whogoesthere.ie", "merrionstreet.ie",
+    "finegael.ie", "fiannafail.ie", "sinnfein.ie", "labour.ie", "greenparty.ie",
+    "socialdemocrats.ie", "peoplebeforeprofit.ie", "aontu.ie",
 }
+
+# Keywords that indicate an Irish politician search
+_POLITICIAN_KEYWORDS = {
+    "politician", "politicians", "councillor", "councillors", "td", "tds",
+    "teachta dála", "senator", "senators", "mep", "meps", "local representative",
+    "local representatives", "seanad", "dáil", "oireachtas member",
+}
+
+# Irish political parties — used to build targeted search queries
+_IRISH_PARTIES = [
+    "Fianna Fáil", "Fine Gael", "Sinn Féin",
+    "Labour", "Green Party", "Social Democrats",
+    "People Before Profit", "Aontú", "Independent",
+]
+
+
+def _is_politician_search(industry: str) -> bool:
+    return any(kw in industry.lower() for kw in _POLITICIAN_KEYWORDS)
+
+
+def _politician_queries(location: str) -> list[str]:
+    """Build DuckDuckGo queries targeted at Irish politicians' personal websites."""
+    loc = location.strip()
+    return [
+        f'councillor "{loc}" Ireland personal website -site:oireachtas.ie',
+        f'TD "{loc}" Ireland official personal website -site:oireachtas.ie',
+        f'senator Ireland "{loc}" website -site:oireachtas.ie',
+        f'"local councillor" "{loc}" site:ie',
+        f'fianna fáil councillor "{loc}" website',
+        f'fine gael TD "{loc}" website',
+        f'sinn féin councillor "{loc}" personal site',
+        f'labour green party councillor "{loc}" Ireland website',
+        f'independent TD councillor "{loc}" Ireland official website',
+    ]
 
 
 def normalize_domain(raw: str) -> str:
@@ -53,11 +93,15 @@ def find_companies(industry: str, location: str, limit: int) -> list[dict]:
     if remaining <= 0:
         return results[:limit]
 
-    queries = [
-        f"{industry} {location} official website",
-        f"best {industry} in {location}",
-        f"{industry} company {location} contact",
-    ]
+    queries = (
+        _politician_queries(location)
+        if _is_politician_search(industry)
+        else [
+            f"{industry} {location} official website",
+            f"best {industry} in {location}",
+            f"{industry} company {location} contact",
+        ]
+    )
 
     with DDGS() as ddgs:
         for query in queries:
