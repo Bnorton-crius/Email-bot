@@ -9,32 +9,43 @@
   </h1>
 </div>
 
-<!-- Send controls bar -->
-<div class="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-6 flex flex-wrap items-end gap-4">
-  <div>
-    <p class="text-sm font-semibold text-gray-200 mb-2">Send Emails</p>
-    <p class="text-xs text-gray-400 mb-3">Approve drafts below, then send all approved (or all pending) from here.</p>
+<!-- Send controls: two explicit modes -->
+<div class="grid grid-cols-2 gap-4 mb-6">
+
+  <!-- Mode A: Manual approval -->
+  <div class="bg-gray-800 border border-gray-700 rounded-lg p-4">
+    <p class="text-sm font-semibold text-gray-200 mb-1">Manual Mode</p>
+    <p class="text-xs text-gray-400 mb-3">Review and approve each draft below, then send only the ones you approved.</p>
     <div class="flex flex-wrap gap-2">
-      <!-- Send all approved -->
-      <form hx-post="/api/send" hx-target="#send-status" hx-swap="innerHTML" class="inline-flex items-center gap-2">
+      <form hx-post="/api/send" hx-target="#send-status" hx-swap="innerHTML" class="inline">
         <input type="hidden" name="approved_only" value="1">
         <button type="submit" class="btn btn-green">✓ Send Approved</button>
       </form>
-      <!-- Send all pending (dry run) -->
-      <form hx-post="/api/send" hx-target="#send-status" hx-swap="innerHTML" class="inline-flex items-center gap-2">
+      <form hx-post="/api/send" hx-target="#send-status" hx-swap="innerHTML" class="inline">
         <input type="hidden" name="dry_run" value="1">
-        <button type="submit" class="btn btn-gray">👁 Dry Run (All)</button>
-      </form>
-      <!-- Send all pending -->
-      <form hx-post="/api/send" hx-target="#send-status" hx-swap="innerHTML"
-            hx-confirm="Send ALL pending drafts (even unapproved)? This cannot be undone."
-            class="inline-flex items-center gap-2">
-        <button type="submit" class="btn btn-indigo">⚡ Send All Pending</button>
+        <input type="hidden" name="approved_only" value="1">
+        <button type="submit" class="btn btn-gray">👁 Dry Run</button>
       </form>
     </div>
   </div>
-  <div id="send-status" class="text-sm ml-auto"></div>
+
+  <!-- Mode B: Auto-send (no approval) -->
+  <div class="bg-gray-800 border border-orange-800 rounded-lg p-4">
+    <p class="text-sm font-semibold text-orange-300 mb-1">Auto-Send Mode</p>
+    <p class="text-xs text-gray-400 mb-3">Skip the approval step — send all pending drafts directly. No review needed.</p>
+    <div class="flex flex-wrap gap-2">
+      <form hx-post="/api/send" hx-target="#send-status" hx-swap="innerHTML" class="inline">
+        <button type="submit" class="btn btn-orange">⚡ Send All Directly</button>
+      </form>
+      <form hx-post="/api/send" hx-target="#send-status" hx-swap="innerHTML" class="inline">
+        <input type="hidden" name="dry_run" value="1">
+        <button type="submit" class="btn btn-gray">👁 Dry Run</button>
+      </form>
+    </div>
+  </div>
+
 </div>
+<div id="send-status" class="text-sm mb-4 min-h-5"></div>
 
 <div class="space-y-4">
   {% for d in drafts %}
@@ -122,6 +133,8 @@
   .btn-gray:hover { background: #4b5563; }
   .btn-indigo { background: #3730a3; color: #c7d2fe; }
   .btn-indigo:hover { background: #4338ca; }
+  .btn-orange { background: #7c2d12; color: #fdba74; }
+  .btn-orange:hover { background: #9a3412; }
   .line-clamp-4 {
     display: -webkit-box; -webkit-line-clamp: 4;
     -webkit-box-orient: vertical; overflow: hidden;

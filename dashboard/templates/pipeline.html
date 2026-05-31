@@ -84,30 +84,55 @@
     <div class="bg-gray-800 border border-gray-700 rounded-lg p-5">
       <h2 class="font-semibold text-white mb-1">4 · Send Emails</h2>
       <p class="text-xs text-gray-400 mb-3">
-        Dispatch pending drafts via SMTP.
         <span class="text-indigo-400">{{ stats.pending_drafts }} draft(s) queued.</span>
+        Choose how to send them.
       </p>
-      <form hx-post="/api/send" hx-target="#op-status" hx-swap="innerHTML" class="space-y-3">
-        <div class="flex gap-4 items-center">
-          <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-            <input type="checkbox" name="dry_run" value="1"
-                   class="rounded bg-gray-700 border-gray-500 text-indigo-500 focus:ring-indigo-500">
-            Dry run (preview only)
-          </label>
-          <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
-            <input type="checkbox" name="approved_only" value="1"
-                   class="rounded bg-gray-700 border-gray-500 text-indigo-500 focus:ring-indigo-500">
-            Approved drafts only
-          </label>
+
+      <!-- Two-mode layout -->
+      <div class="grid grid-cols-2 gap-3 mb-2">
+
+        <!-- Manual mode -->
+        <div class="bg-gray-900 rounded p-3 border border-gray-700">
+          <p class="text-xs font-semibold text-gray-300 mb-1">Manual Mode</p>
+          <p class="text-xs text-gray-500 mb-2">Send only drafts you've approved on the Emails page.</p>
+          <div class="flex gap-2">
+            <form hx-post="/api/send" hx-target="#op-status" hx-swap="innerHTML" class="inline">
+              <input type="hidden" name="approved_only" value="1">
+              <button type="submit" class="btn btn-green text-xs py-1 px-3">✓ Send Approved</button>
+            </form>
+            <form hx-post="/api/send" hx-target="#op-status" hx-swap="innerHTML" class="inline">
+              <input type="hidden" name="approved_only" value="1">
+              <input type="hidden" name="dry_run" value="1">
+              <button type="submit" class="btn btn-gray text-xs py-1 px-3">👁 Dry Run</button>
+            </form>
+          </div>
         </div>
-        <button type="submit" class="btn btn-green">📤 Send Emails</button>
-      </form>
+
+        <!-- Auto-send mode -->
+        <div class="bg-gray-900 rounded p-3 border border-orange-900">
+          <p class="text-xs font-semibold text-orange-300 mb-1">Auto-Send Mode</p>
+          <p class="text-xs text-gray-500 mb-2">Send all pending drafts directly — no approval step.</p>
+          <div class="flex gap-2">
+            <form hx-post="/api/send" hx-target="#op-status" hx-swap="innerHTML" class="inline">
+              <button type="submit" class="btn btn-orange text-xs py-1 px-3">⚡ Send All Directly</button>
+            </form>
+            <form hx-post="/api/send" hx-target="#op-status" hx-swap="innerHTML" class="inline">
+              <input type="hidden" name="dry_run" value="1">
+              <button type="submit" class="btn btn-gray text-xs py-1 px-3">👁 Dry Run</button>
+            </form>
+          </div>
+        </div>
+
+      </div>
     </div>
 
     <!-- 5. Full Pipeline -->
     <div class="bg-gray-800 border border-indigo-700 rounded-lg p-5">
       <h2 class="font-semibold text-indigo-300 mb-1">⚡ Full Pipeline</h2>
-      <p class="text-xs text-gray-400 mb-3">Run all four steps in sequence: Find → Analyse → Generate → Send.</p>
+      <p class="text-xs text-gray-400 mb-3">
+        Run all four steps in sequence: Find → Analyse → Generate → Send.
+        <span class="text-orange-400">Emails are sent automatically — no approval step.</span>
+      </p>
       <form hx-post="/api/run" hx-target="#op-status" hx-swap="innerHTML" class="space-y-3">
         <div class="flex flex-wrap gap-3">
           <div class="flex-1 min-w-32">
@@ -137,7 +162,7 @@
           <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
             <input type="checkbox" name="dry_run" value="1"
                    class="rounded bg-gray-700 border-gray-500 text-indigo-500 focus:ring-indigo-500">
-            Dry run (preview send)
+            Dry run (preview send, don't actually email)
           </label>
           <button type="submit" class="btn btn-indigo">⚡ Run Full Pipeline</button>
         </div>
@@ -185,5 +210,7 @@
   .btn-green:hover:not(:disabled)  { background: #15803d; }
   .btn-gray   { background: #374151; color: #d1d5db; }
   .btn-gray:hover:not(:disabled)   { background: #4b5563; }
+  .btn-orange { background: #7c2d12; color: #fdba74; }
+  .btn-orange:hover:not(:disabled) { background: #9a3412; }
 </style>
 {% endblock %}
