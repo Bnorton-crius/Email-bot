@@ -3,13 +3,37 @@
 {% block nav_emails %}active{% endblock %}
 
 {% block content %}
-<div class="flex items-center justify-between mb-6">
+<div class="flex items-center justify-between mb-4">
   <h1 class="text-2xl font-bold text-white">Email Drafts
     <span class="ml-2 text-base font-normal text-gray-400">({{ drafts|length }} total)</span>
   </h1>
-  <div class="text-sm text-gray-400">
-    Approve drafts here, then run <code class="bg-gray-700 px-1 rounded">python main.py send</code>
+</div>
+
+<!-- Send controls bar -->
+<div class="bg-gray-800 border border-gray-700 rounded-lg p-4 mb-6 flex flex-wrap items-end gap-4">
+  <div>
+    <p class="text-sm font-semibold text-gray-200 mb-2">Send Emails</p>
+    <p class="text-xs text-gray-400 mb-3">Approve drafts below, then send all approved (or all pending) from here.</p>
+    <div class="flex flex-wrap gap-2">
+      <!-- Send all approved -->
+      <form hx-post="/api/send" hx-target="#send-status" hx-swap="innerHTML" class="inline-flex items-center gap-2">
+        <input type="hidden" name="approved_only" value="1">
+        <button type="submit" class="btn btn-green">✓ Send Approved</button>
+      </form>
+      <!-- Send all pending (dry run) -->
+      <form hx-post="/api/send" hx-target="#send-status" hx-swap="innerHTML" class="inline-flex items-center gap-2">
+        <input type="hidden" name="dry_run" value="1">
+        <button type="submit" class="btn btn-gray">👁 Dry Run (All)</button>
+      </form>
+      <!-- Send all pending -->
+      <form hx-post="/api/send" hx-target="#send-status" hx-swap="innerHTML"
+            hx-confirm="Send ALL pending drafts (even unapproved)? This cannot be undone."
+            class="inline-flex items-center gap-2">
+        <button type="submit" class="btn btn-indigo">⚡ Send All Pending</button>
+      </form>
+    </div>
   </div>
+  <div id="send-status" class="text-sm ml-auto"></div>
 </div>
 
 <div class="space-y-4">
@@ -80,8 +104,8 @@
 </div>
 
 <style>
-  .btn-sm {
-    padding: 0.35rem 0.75rem;
+  .btn, .btn-sm {
+    padding: 0.35rem 0.85rem;
     border-radius: 0.375rem;
     font-size: 0.8rem;
     font-weight: 600;
@@ -89,10 +113,15 @@
     border: none;
     transition: background 0.15s;
   }
+  .btn { padding: 0.45rem 1rem; font-size: 0.875rem; }
   .btn-green { background: #166534; color: #86efac; }
   .btn-green:hover { background: #15803d; }
   .btn-red   { background: #7f1d1d; color: #fca5a5; }
   .btn-red:hover { background: #991b1b; }
+  .btn-gray  { background: #374151; color: #d1d5db; }
+  .btn-gray:hover { background: #4b5563; }
+  .btn-indigo { background: #3730a3; color: #c7d2fe; }
+  .btn-indigo:hover { background: #4338ca; }
   .line-clamp-4 {
     display: -webkit-box; -webkit-line-clamp: 4;
     -webkit-box-orient: vertical; overflow: hidden;
