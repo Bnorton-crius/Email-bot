@@ -111,11 +111,19 @@ def send_email(
             html = _build_html(draft.body, tracking_token, tracking_url)
             msg.attach(MIMEText(html, "html"))
 
-        with smtplib.SMTP(smtp_cfg.host, smtp_cfg.port, timeout=30) as server:
-            server.ehlo()
-            server.starttls()
-            server.login(smtp_cfg.user, smtp_cfg.password)
-            server.sendmail(smtp_cfg.from_email, to_email, msg.as_string())
+        if smtp_cfg.port == 465:
+            # SSL — Zoho port 465, or any provider using implicit TLS
+            with smtplib.SMTP_SSL(smtp_cfg.host, smtp_cfg.port, timeout=30) as server:
+                server.ehlo()
+                server.login(smtp_cfg.user, smtp_cfg.password)
+                server.sendmail(smtp_cfg.from_email, to_email, msg.as_string())
+        else:
+            # STARTTLS — Gmail/Zoho port 587, standard for most providers
+            with smtplib.SMTP(smtp_cfg.host, smtp_cfg.port, timeout=30) as server:
+                server.ehlo()
+                server.starttls()
+                server.login(smtp_cfg.user, smtp_cfg.password)
+                server.sendmail(smtp_cfg.from_email, to_email, msg.as_string())
 
         if delay_seconds > 0:
             time.sleep(delay_seconds)

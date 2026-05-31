@@ -53,33 +53,70 @@ Edit `.env` with your real values (see Configuration section below).
 
 ## Configuration
 
-Create a `.env` file in the project root. All keys:
+Create a `.env` file in the project root:
+
+```bash
+cp .env.example .env
+```
+
+### SMTP Provider Setup
+
+#### Zoho Mail with a Custom Domain (Recommended)
+
+Zoho lets you send from `you@yourdomain.com` for free (up to 5 users). Setup:
+
+1. Go to [zoho.com/mail](https://www.zoho.com/mail/) → sign up → **Add Custom Domain**
+2. Add the MX, SPF, and DKIM records Zoho gives you to your domain's DNS
+3. Create a mailbox (e.g. `outreach@yourdomain.com`)
+4. If you have 2FA enabled, create an **App Password**: Zoho Account → Security → App Passwords
+5. Set these in your `.env`:
 
 ```env
-# Required
-ANTHROPIC_API_KEY=sk-ant-...          # Claude API key
+SMTP_HOST=smtp.zoho.com
+SMTP_PORT=587
+SMTP_USER=outreach@yourdomain.com
+SMTP_PASSWORD=your_zoho_password_or_app_password
+FROM_EMAIL=outreach@yourdomain.com
+FROM_NAME=Your Agency Name
+```
 
-# SMTP (required to send emails)
+**EU-hosted Zoho accounts** (zoho.eu): change `SMTP_HOST` to `smtp.zoho.eu`.
+
+**Port 465 (SSL)** works too — the bot auto-detects SSL vs STARTTLS based on the port number:
+```env
+SMTP_HOST=smtp.zoho.com
+SMTP_PORT=465
+```
+
+#### Gmail
+
+```env
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=you@gmail.com
-SMTP_PASSWORD=your-app-password       # Gmail: use an App Password, not your account password
-FROM_EMAIL=you@gmail.com
-FROM_NAME=Your Agency Name
-
-# Optional
-SEND_DELAY_SECONDS=30                 # Delay between each email send (default: 30)
-DB_PATH=data/companies.db             # SQLite database location (default: data/companies.db)
-GOOGLE_PLACES_API_KEY=AIza...         # Google Places API key — improves company discovery
-TRACKING_URL=https://yourdomain.com   # Public URL of this server, used for open/click tracking pixels
+SMTP_PASSWORD=your_app_password
 ```
 
-### Gmail App Password
+Gmail requires an **App Password** — your regular account password won't work with SMTP:
+1. Google Account → Security → 2-Step Verification → App passwords
+2. Create a password for "Mail" → copy the 16-character code
+3. Use that as `SMTP_PASSWORD`
 
-If using Gmail, you must generate an **App Password** (your account password will not work with SMTP):
-1. Go to Google Account → Security → 2-Step Verification → App passwords
-2. Create a password for "Mail"
-3. Paste that 16-character password as `SMTP_PASSWORD`
+### All `.env` Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `ANTHROPIC_API_KEY` | Yes | — | Claude API key |
+| `SMTP_HOST` | Yes | — | e.g. `smtp.zoho.com` or `smtp.gmail.com` |
+| `SMTP_PORT` | Yes | — | `587` (STARTTLS) or `465` (SSL) |
+| `SMTP_USER` | Yes | — | Your full email address |
+| `SMTP_PASSWORD` | Yes | — | Password or App Password |
+| `FROM_EMAIL` | Yes | — | Sender email address |
+| `FROM_NAME` | Yes | — | Sender display name |
+| `SEND_DELAY_SECONDS` | No | `30` | Pause between each email (prevents spam flags) |
+| `DB_PATH` | No | `data/companies.db` | SQLite database path |
+| `GOOGLE_PLACES_API_KEY` | No | — | Improves company discovery |
+| `TRACKING_URL` | No | `http://localhost:8000` | Public URL for open/click tracking |
 
 ---
 
