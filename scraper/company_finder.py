@@ -75,7 +75,7 @@ def _is_skip_domain(domain: str) -> bool:
 
 
 def find_companies(industry: str, location: str, limit: int, log=None) -> list[dict]:
-    """Find companies via Google Places (if configured) then DuckDuckGo."""
+    """Find companies — Google Places first (primary), DuckDuckGo as fallback."""
 
     def _log(msg: str) -> None:
         if log:
@@ -84,24 +84,26 @@ def find_companies(industry: str, location: str, limit: int, log=None) -> list[d
     results: list[dict] = []
     seen_domains: set[str] = set()
 
-    # Try Google Places first — higher quality, structured data
+    # ── Primary: Google Places ────────────────────────────────────────────────
+    _log("[ Google Places ]")
+    from scraper.places_finder import find_via_places
     try:
-        from scraper.places_finder import find_via_places
-        places_results = find_via_places(industry, location, limit)
+        places_results = find_via_places(industry, location, limit, log=log)
         for r in places_results:
             d = r["domain"]
             if d and not _is_skip_domain(d) and d not in seen_domains:
                 seen_domains.add(d)
                 results.append(r)
-        if results:
-            _log(f"  Google Places: {len(results)} result(s)")
+        _log(f"  Google Places total: {len(results)} result(s)")
     except Exception as exc:
-        _log(f"  Google Places unavailable: {exc}")
+        _log(f"  Google Places failed: {exc}")
 
-    # Fill remaining slots with DuckDuckGo
+    # ── Secondary: DuckDuckGo (fills remaining slots) ─────────────────────────
     remaining = limit - len(results)
     if remaining <= 0:
         return results[:limit]
+
+    _log(f"[ DuckDuckGo — filling {remaining} remaining slot(s) ]")
 
     queries = (
         _politician_queries(location)

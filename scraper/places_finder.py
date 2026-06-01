@@ -1,77 +1,99 @@
 import os
 import time
 
-try:
-    import googlemaps
-    _GMAPS_OK = True
-except ImportError:
-    _GMAPS_OK = False
+import requests
 
 from scraper.company_finder import normalize_domain, _is_skip_domain
 
+# New Places API v1 — returns website in the same call, no separate Details request needed
+_SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
+_FIELD_MASK = "places.id,places.displayName,places.websiteUri,nextPageToken"
 
-def find_via_places(industry: str, location: str, limit: int) -> list[dict]:
-    """Discover companies using the Google Places API.
 
-    Returns a list of company dicts (name, domain, industry) or an empty list
-    if the API key is absent, the library is not installed, or any error occurs.
+def find_via_places(industry: str, location: str, limit: int, log=None) -> list[dict]:
+    """Search Google Places API (v1) for businesses with a website.
+
+    Returns a list of company dicts, or [] if no API key is set or an error occurs.
     """
+    def _log(msg: str) -> None:
+        if log:
+            log(msg)
+
     api_key = os.environ.get("GOOGLE_PLACES_API_KEY", "")
-    if not api_key or not _GMAPS_OK:
+    if not api_key:
+        _log("  Google Places: GOOGLE_PLACES_API_KEY not set — skipping")
         return []
 
-    try:
-        gmaps = googlemaps.Client(key=api_key)
-        query = f"{industry} in {location}"
-        results: list[dict] = []
-        seen: set[str] = set()
+    query = f"{industry} in {location}"
+    _log(f"  Google Places query: '{query}'")
 
-        response = gmaps.places(query=query)
+    results: list[dict] = []
+    seen: set[str] = set()
+    page_token: str | None = None
+    page = 0
 
-        while True:
-            for place in response.get("results", []):
-                if len(results) >= limit:
-                    break
+    while len(results) < limit:
+        page += 1
+        payload: dict = {
+            "textQuery": query,
+            "maxResultCount": min(20, limit),  # API cap is 20 per page
+        }
+        if page_token:
+            payload["pageToken"] = page_token
 
-                place_id = place.get("place_id")
-                if not place_id:
-                    continue
+        headers = {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": api_key,
+            "X-Goog-FieldMask": _FIELD_MASK,
+        }
 
-                # Fetch full details to get the website field
-                details = gmaps.place(
-                    place_id,
-                    fields=["name", "website", "formatted_phone_number"],
-                )
-                info = details.get("result", {})
-                website = info.get("website", "")
-                if not website:
-                    continue
+        try:
+            resp = requests.post(_SEARCH_URL, json=payload, headers=headers, timeout=15)
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.HTTPError as exc:
+            body = exc.response.text[:200] if exc.response is not None else ""
+            _log(f"  ✗ Google Places API error {exc.response.status_code}: {body}")
+            break
+        except Exception as exc:
+            _log(f"  ✗ Google Places request failed: {exc}")
+            break
 
-                domain = normalize_domain(website)
-                if not domain or _is_skip_domain(domain) or domain in seen:
-                    continue
-                seen.add(domain)
+        places = data.get("places", [])
+        if not places:
+            _log(f"  Google Places: no results on page {page}")
+            break
 
-                results.append(
-                    {
-                        "name": info.get("name") or place.get("name", "Unknown"),
-                        "domain": domain,
-                        "industry": industry,
-                        "source_query": f"places:{query}",
-                    }
-                )
-                time.sleep(0.15)  # stay within rate limits
-
+        before = len(results)
+        for place in places:
             if len(results) >= limit:
                 break
 
-            next_token = response.get("next_page_token")
-            if not next_token:
-                break
-            time.sleep(2)  # required pause before using next_page_token
-            response = gmaps.places(page_token=next_token)
+            website = place.get("websiteUri", "")
+            if not website:
+                continue
 
-        return results[:limit]
+            domain = normalize_domain(website)
+            if not domain or _is_skip_domain(domain) or domain in seen:
+                continue
 
-    except Exception:
-        return []
+            display = place.get("displayName", {})
+            name = display.get("text", "Unknown") if isinstance(display, dict) else str(display)
+
+            seen.add(domain)
+            results.append({
+                "name": name,
+                "domain": domain,
+                "industry": industry,
+                "source_query": f"places:{query}",
+            })
+
+        added = len(results) - before
+        _log(f"  Google Places page {page}: {len(places)} places → {added} new domain(s) (total: {len(results)})")
+
+        page_token = data.get("nextPageToken")
+        if not page_token or len(results) >= limit:
+            break
+        time.sleep(1)  # brief pause between pages
+
+    return results[:limit]

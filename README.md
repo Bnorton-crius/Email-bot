@@ -115,8 +115,20 @@ Gmail requires an **App Password** — your regular account password won't work 
 | `FROM_NAME` | Yes | — | Sender display name |
 | `SEND_DELAY_SECONDS` | No | `30` | Pause between each email (prevents spam flags) |
 | `DB_PATH` | No | `data/companies.db` | SQLite database path |
-| `GOOGLE_PLACES_API_KEY` | No | — | Improves company discovery |
+| `GOOGLE_PLACES_API_KEY` | Recommended | — | Primary company source — structured results with real business names and websites (see below) |
 | `TRACKING_URL` | No | `http://localhost:8000` | Public URL for open/click tracking |
+
+### Google Places API Key (Recommended)
+
+Google Places is the primary search source — it returns verified business names, real websites, and accurate locations. DuckDuckGo is used as a secondary fallback when Places returns fewer results than requested.
+
+To get a key:
+1. Go to [console.cloud.google.com](https://console.cloud.google.com/)
+2. Create a project → Enable **Places API (New)**
+3. Credentials → Create API Key → copy it to `GOOGLE_PLACES_API_KEY`
+4. Set an API key restriction to "Places API" to limit exposure
+
+Without a key, the bot falls back to DuckDuckGo search only.
 
 ---
 
