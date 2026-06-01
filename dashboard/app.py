@@ -118,7 +118,7 @@ def _start_task(name: str, fn: Callable) -> bool:
 
 def _do_find(industry: str, location: str, limit: int) -> None:
     _log(f"Searching: '{industry}' in {location} (limit {limit})…")
-    companies = find_companies(industry, location, limit)
+    companies = find_companies(industry, location, limit, log=_log)
     _log(f"Search returned {len(companies)} results")
     new_count = 0
     with db_conn(cfg.db_path) as conn:

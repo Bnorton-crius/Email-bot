@@ -2,7 +2,10 @@ import re
 import time
 from urllib.parse import urlparse
 
-from duckduckgo_search import DDGS
+try:
+    from ddgs import DDGS
+except ImportError:
+    from duckduckgo_search import DDGS  # legacy package name
 
 _SKIP_DOMAINS = {
     "yelp.com", "google.com", "facebook.com", "linkedin.com",
@@ -71,8 +74,13 @@ def _is_skip_domain(domain: str) -> bool:
     return any(skip in domain for skip in _SKIP_DOMAINS)
 
 
-def find_companies(industry: str, location: str, limit: int) -> list[dict]:
+def find_companies(industry: str, location: str, limit: int, log=None) -> list[dict]:
     """Find companies via Google Places (if configured) then DuckDuckGo."""
+
+    def _log(msg: str) -> None:
+        if log:
+            log(msg)
+
     results: list[dict] = []
     seen_domains: set[str] = set()
 
@@ -85,8 +93,10 @@ def find_companies(industry: str, location: str, limit: int) -> list[dict]:
             if d and not _is_skip_domain(d) and d not in seen_domains:
                 seen_domains.add(d)
                 results.append(r)
-    except Exception:
-        pass
+        if results:
+            _log(f"  Google Places: {len(results)} result(s)")
+    except Exception as exc:
+        _log(f"  Google Places unavailable: {exc}")
 
     # Fill remaining slots with DuckDuckGo
     remaining = limit - len(results)
@@ -103,12 +113,18 @@ def find_companies(industry: str, location: str, limit: int) -> list[dict]:
         ]
     )
 
+    _log(f"  Running {len(queries)} DuckDuckGo queries…")
+    ddgs_errors = 0
+
     with DDGS() as ddgs:
         for query in queries:
             if len(results) >= limit:
                 break
+            _log(f"  Query: {query}")
             try:
-                for hit in ddgs.text(query, max_results=25):
+                hits = ddgs.text(query, max_results=25)
+                found_this_query = 0
+                for hit in (hits or []):
                     if len(results) >= limit:
                         break
                     url = hit.get("href", "")
@@ -132,9 +148,19 @@ def find_companies(industry: str, location: str, limit: int) -> list[dict]:
                             "source_query": query,
                         }
                     )
+                    found_this_query += 1
+
+                _log(f"    → {found_this_query} new domain(s) (total so far: {len(results)})")
                 time.sleep(1.5)
-            except Exception:
+
+            except Exception as exc:
+                ddgs_errors += 1
+                _log(f"  ✗ Query failed: {type(exc).__name__}: {exc}")
+                if ddgs_errors >= 2:
+                    _log("  ⚠ DuckDuckGo is rate-limiting or blocking this IP.")
+                    _log("    This is normal in cloud/CI environments.")
+                    _log("    Running the bot from your own machine will work.")
+                    break
                 time.sleep(3)
-                continue
 
     return results[:limit]
