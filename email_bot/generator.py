@@ -1,21 +1,29 @@
 import base64
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import anthropic
 
 from scraper.website_analyzer import ScoreResult
 
-_SYSTEM_PROMPT = """You are an outreach specialist for a web development and AI agency. \
-You write short, warm, human emails to potential clients — never sounding like a sales robot \
-or a technical manual.
+# ── System prompt parts ───────────────────────────────────────────────────────
 
-Our agency builds:
+_DEFAULT_OFFER = """\
 - Clean, modern websites that work perfectly on phones
 - AI tools that answer customer or constituent queries automatically
 - Booking and contact systems that save time
-- Custom web applications
+- Custom web applications"""
+
+_SYSTEM_PROMPT_HEAD = """\
+You are an outreach specialist for a web development and AI agency. \
+You write short, warm, human emails to potential clients — never sounding like a sales robot \
+or a technical manual.
+
+Our agency offers:
+"""
+
+_SYSTEM_PROMPT_TAIL = """
 
 ## Audience context
 
@@ -75,6 +83,12 @@ common about 10 years ago" — not "outdated" (too blunt) and not "your meta tag
 Return ONLY valid JSON with exactly two keys: "subject" and "body".
 Do not wrap in markdown code fences."""
 
+
+def _build_system_prompt(offer: str | None = None) -> str:
+    offer_text = offer.strip() if offer and offer.strip() else _DEFAULT_OFFER
+    return _SYSTEM_PROMPT_HEAD + offer_text + _SYSTEM_PROMPT_TAIL
+
+
 # Visual assessment task prepended to the user message when a screenshot is available
 _VISUAL_TASK = """\
 Look at this screenshot carefully before writing anything. Assess:
@@ -101,9 +115,12 @@ def generate_email(
     score_result: ScoreResult,
     client: anthropic.Anthropic | None = None,
     screenshot_path: str | None = None,
+    offer: str | None = None,
 ) -> EmailDraft:
     if client is None:
         client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+
+    system_prompt = _build_system_prompt(offer)
 
     issues = score_result.notes[:3] if score_result.notes else ["outdated overall design"]
     issues_text = "\n".join(f"- {issue}" for issue in issues)
@@ -141,8 +158,6 @@ def generate_email(
                         "data": img_b64,
                     },
                 },
-                # Prepend visual assessment task so Claude looks at the image
-                # before writing — this surfaces outdated design patterns specifically
                 {"type": "text", "text": _VISUAL_TASK + user_text},
             ]
         except Exception:
@@ -156,7 +171,7 @@ def generate_email(
         system=[
             {
                 "type": "text",
-                "text": _SYSTEM_PROMPT,
+                "text": system_prompt,
                 "cache_control": {"type": "ephemeral"},
             }
         ],

@@ -74,8 +74,21 @@
             <input type="number" name="max_score" value="70" min="0" max="100"
                    class="w-20 bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500">
           </div>
-          <button type="submit" class="btn btn-indigo">✍️ Generate Emails</button>
         </div>
+
+        <!-- Offer / pitch customisation -->
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">
+            What are we offering?
+            <span class="text-gray-600 ml-1">(leave blank for default: website building + AI tools)</span>
+          </label>
+          <textarea name="offer" rows="3"
+                    placeholder="e.g. SEO audits and content rewrites&#10;e.g. Social media management and paid ads&#10;e.g. E-commerce store setup on Shopify"
+                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 resize-y"></textarea>
+          <p class="text-xs text-gray-600 mt-1">Each line becomes a bullet point in the email pitch. Claude adapts the tone to match the offer.</p>
+        </div>
+
+        <button type="submit" class="btn btn-indigo">✍️ Generate Emails</button>
         <p class="text-xs text-gray-500">Only companies without an existing draft are targeted.</p>
       </form>
     </div>
@@ -158,6 +171,17 @@
                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-indigo-500">
           </div>
         </div>
+        <!-- Offer for full pipeline -->
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">
+            What are we offering?
+            <span class="text-gray-600 ml-1">(leave blank for default: website building + AI tools)</span>
+          </label>
+          <textarea name="offer" rows="2"
+                    placeholder="e.g. SEO audits and content rewrites&#10;e.g. Social media management and paid ads"
+                    class="w-full bg-gray-900 border border-gray-600 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500 resize-y"></textarea>
+        </div>
+
         <div class="flex gap-4 items-center">
           <label class="flex items-center gap-2 text-sm text-gray-300 cursor-pointer">
             <input type="checkbox" name="dry_run" value="1"

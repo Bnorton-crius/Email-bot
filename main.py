@@ -203,6 +203,7 @@ def cmd_generate(args) -> None:
                     score_result,
                     client,
                     screenshot_path=company.get("screenshot_path"),
+                    offer=getattr(args, "offer", None) or None,
                 )
                 cached_total += draft.cached_tokens
                 with db_conn(cfg.db_path) as conn:
@@ -342,7 +343,8 @@ def cmd_run(args) -> None:
         industry=args.industry, location=args.location, limit=args.limit
     ))
     cmd_analyze(argparse.Namespace())
-    cmd_generate(argparse.Namespace(min_score=0, max_score=args.max_score))
+    cmd_generate(argparse.Namespace(min_score=0, max_score=args.max_score,
+                                    offer=getattr(args, "offer", None)))
     cmd_send(argparse.Namespace(dry_run=args.dry_run))
 
     console.print(Panel("[bold green]Pipeline complete![/bold green]", border_style="green"))
@@ -410,6 +412,8 @@ def main() -> None:
     p = sub.add_parser("generate", help="Generate personalized email drafts via Claude")
     p.add_argument("--min-score", type=int, default=0, dest="min_score")
     p.add_argument("--max-score", type=int, default=70, dest="max_score")
+    p.add_argument("--offer", type=str, default="",
+                   help="What the email is offering (default: website building + AI tools)")
     p.set_defaults(func=cmd_generate)
 
     p = sub.add_parser("send", help="Send (or preview) pending email drafts")
@@ -431,6 +435,8 @@ def main() -> None:
     p.add_argument("--limit", type=int, default=20)
     p.add_argument("--max-score", type=int, default=70, dest="max_score")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument("--offer", type=str, default="",
+                   help="What the email is offering (default: website building + AI tools)")
     p.set_defaults(func=cmd_run)
 
     args = parser.parse_args()

@@ -157,7 +157,7 @@ def _do_analyze() -> None:
         _log(f"  {status_icon} {result.total}/100  [{result.platform}]  {result.status}")
 
 
-def _do_generate(min_score: int, max_score: int) -> None:
+def _do_generate(min_score: int, max_score: int, offer: str = "") -> None:
     if not cfg.anthropic_api_key:
         raise ValueError("ANTHROPIC_API_KEY is not set in .env")
     import anthropic
@@ -167,7 +167,8 @@ def _do_generate(min_score: int, max_score: int) -> None:
     if not companies:
         _log(f"No companies in score range {min_score}–{max_score} need an email draft")
         return
-    _log(f"Generating emails for {len(companies)} companies…")
+    offer_preview = offer.strip()[:60] + "…" if offer and len(offer.strip()) > 60 else (offer.strip() or "default (website building)")
+    _log(f"Generating emails for {len(companies)} companies… [offer: {offer_preview}]")
     cached_total = 0
     for company in companies:
         _log(f"  Writing email for {company['name']}…")
@@ -183,7 +184,8 @@ def _do_generate(min_score: int, max_score: int) -> None:
         )
         try:
             draft = generate_email(company, score_result, client,
-                                   company.get("screenshot_path"))
+                                   company.get("screenshot_path"),
+                                   offer=offer or None)
             cached_total += draft.cached_tokens
             with db_conn(cfg.db_path) as conn:
                 save_email_draft(conn, company["id"], draft.subject, draft.body)
@@ -235,10 +237,10 @@ def _do_send(dry_run: bool, approved_only: bool) -> None:
 
 
 def _do_run(industry: str, location: str, limit: int,
-            max_score: int, dry_run: bool) -> None:
+            max_score: int, dry_run: bool, offer: str = "") -> None:
     _do_find(industry, location, limit)
     _do_analyze()
-    _do_generate(min_score=0, max_score=max_score)
+    _do_generate(min_score=0, max_score=max_score, offer=offer)
     _do_send(dry_run=dry_run, approved_only=False)
 
 
@@ -335,9 +337,10 @@ async def api_analyze():
 async def api_generate(
     min_score: int = Form(0),
     max_score: int = Form(70),
+    offer: str = Form(""),
 ):
     ok = _start_task(f"Generate Emails (score {min_score}–{max_score})",
-                     lambda: _do_generate(min_score, max_score))
+                     lambda: _do_generate(min_score, max_score, offer))
     if not ok:
         return HTMLResponse('<p class="text-yellow-400 text-sm">⚠ Another task is running</p>')
     return HTMLResponse('<p class="text-green-400 text-sm">▶ Started — watch the log →</p>')
@@ -364,11 +367,12 @@ async def api_run(
     limit: int = Form(20),
     max_score: int = Form(70),
     dry_run: str = Form(""),
+    offer: str = Form(""),
 ):
     dr = bool(dry_run)
     ok = _start_task(
         f"Full Pipeline: {industry} in {location}",
-        lambda: _do_run(industry, location, limit, max_score, dr),
+        lambda: _do_run(industry, location, limit, max_score, dr, offer),
     )
     if not ok:
         return HTMLResponse('<p class="text-yellow-400 text-sm">⚠ Another task is running</p>')
